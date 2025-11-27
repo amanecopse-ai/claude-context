@@ -1,0 +1,32 @@
+{
+  "name": "@zilliz/claude-context-cli",
+  "version": "0.1.3",
+  "description": "Command-line interface for Claude Context (index, search, status, clear).",
+  "type": "module",
+  "main": "dist/cli.js",
+  "types": "dist/cli.d.ts",
+  "bin": {
+    "claude-context": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "pnpm clean && tsc --build --force",
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@zilliz/claude-context-core": "workspace:*",
+    "@zilliz/claude-context-mcp": "workspace:*",
+    "commander": "^14.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zilliztech/claude-context.git",
+    "directory": "packages/cli"
+  },
+  "license": "MIT",
+  "private": true
+}

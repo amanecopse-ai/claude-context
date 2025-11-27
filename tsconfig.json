@@ -20,14 +20,23 @@
         "downlevelIteration": true,
         "incremental": true,
         "tsBuildInfoFile": ".tsbuildinfo",
-        "paths": {
-            "@zilliz/claude-context-core": [
-                "./packages/core/src"
-            ],
-            "@zilliz/claude-context-core/*": [
-                "./packages/core/src/*"
-            ]
-        }
+	        "paths": {
+	            "@zilliz/claude-context-core": [
+	                "./packages/core/src"
+	            ],
+	            "@zilliz/claude-context-core/*": [
+	                "./packages/core/src/*"
+	            ],
+	            "@zilliz/claude-context-mcp": [
+	                "./packages/mcp/src"
+	            ],
+	            "@zilliz/claude-context-mcp/*": [
+	                "./packages/mcp/src/*"
+	            ],
+	            "@zilliz/claude-context-mcp/api": [
+	                "./packages/mcp/src/api.ts"
+	            ]
+	        }
     },
     "references": [
         {
@@ -40,7 +49,10 @@
             "path": "./packages/chrome-extension"
         },
         {
-            "path": "./packages/mcp"
+			"path": "./packages/mcp"
+		},
+		{
+			"path": "./packages/cli"
         }
     ],
     "files": []
