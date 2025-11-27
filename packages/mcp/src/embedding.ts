@@ -1,8 +1,8 @@
-import { OpenAIEmbedding, VoyageAIEmbedding, GeminiEmbedding, OllamaEmbedding } from "@zilliz/claude-context-core";
+import { OpenAIEmbedding, VoyageAIEmbedding, GeminiEmbedding, OllamaEmbedding, VertexAIEmbedding } from "@zilliz/claude-context-core";
 import { ContextMcpConfig } from "./config.js";
 
 // Helper function to create embedding instance based on provider
-export function createEmbeddingInstance(config: ContextMcpConfig): OpenAIEmbedding | VoyageAIEmbedding | GeminiEmbedding | OllamaEmbedding {
+export function createEmbeddingInstance(config: ContextMcpConfig): OpenAIEmbedding | VoyageAIEmbedding | GeminiEmbedding | OllamaEmbedding | VertexAIEmbedding {
     console.log(`[EMBEDDING] Creating ${config.embeddingProvider} embedding instance...`);
 
     switch (config.embeddingProvider) {
@@ -57,13 +57,29 @@ export function createEmbeddingInstance(config: ContextMcpConfig): OpenAIEmbeddi
             console.log(`[EMBEDDING] ✅ Ollama embedding instance created successfully`);
             return ollamaEmbedding;
 
+        case 'VertexAI':
+            const projectId = config.vertexProject;
+            const location = config.vertexLocation || 'global';
+            if (!projectId) {
+                console.error(`[EMBEDDING] ❌ Vertex AI project ID is required but not provided`);
+                throw new Error('VERTEX_PROJECT or GOOGLE_CLOUD_PROJECT is required for VertexAI embedding provider');
+            }
+            console.log(`[EMBEDDING] 🔧 Configuring VertexAI with model: ${config.embeddingModel}, project: ${projectId}, location: ${location}`);
+            const vertexEmbedding = new VertexAIEmbedding({
+                model: config.embeddingModel,
+                projectId,
+                location,
+            });
+            console.log(`[EMBEDDING] ✅ VertexAI embedding instance created successfully`);
+            return vertexEmbedding;
+
         default:
             console.error(`[EMBEDDING] ❌ Unsupported embedding provider: ${config.embeddingProvider}`);
             throw new Error(`Unsupported embedding provider: ${config.embeddingProvider}`);
     }
 }
 
-export function logEmbeddingProviderInfo(config: ContextMcpConfig, embedding: OpenAIEmbedding | VoyageAIEmbedding | GeminiEmbedding | OllamaEmbedding): void {
+export function logEmbeddingProviderInfo(config: ContextMcpConfig, embedding: OpenAIEmbedding | VoyageAIEmbedding | GeminiEmbedding | OllamaEmbedding | VertexAIEmbedding): void {
     console.log(`[EMBEDDING] ✅ Successfully initialized ${config.embeddingProvider} embedding provider`);
     console.log(`[EMBEDDING] Provider details - Model: ${config.embeddingModel}, Dimension: ${embedding.getDimension()}`);
 
@@ -80,6 +96,9 @@ export function logEmbeddingProviderInfo(config: ContextMcpConfig, embedding: Op
             break;
         case 'Ollama':
             console.log(`[EMBEDDING] Ollama configuration - Host: ${config.ollamaHost || 'http://127.0.0.1:11434'}, Model: ${config.embeddingModel}`);
+            break;
+        case 'VertexAI':
+            console.log(`[EMBEDDING] VertexAI configuration - Project: ${config.vertexProject || 'NOT SET'}, Location: ${config.vertexLocation || 'global'}`);
             break;
     }
 } 

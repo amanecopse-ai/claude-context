@@ -4,7 +4,7 @@ export interface ContextMcpConfig {
     name: string;
     version: string;
     // Embedding provider configuration
-    embeddingProvider: 'OpenAI' | 'VoyageAI' | 'Gemini' | 'Ollama';
+    embeddingProvider: 'OpenAI' | 'VoyageAI' | 'Gemini' | 'Ollama' | 'VertexAI';
     embeddingModel: string;
     // Provider-specific API keys
     openaiApiKey?: string;
@@ -12,6 +12,9 @@ export interface ContextMcpConfig {
     voyageaiApiKey?: string;
     geminiApiKey?: string;
     geminiBaseUrl?: string;
+    // Vertex AI configuration (uses ADC / service account credentials)
+    vertexProject?: string;
+    vertexLocation?: string;
     // Ollama configuration
     ollamaModel?: string;
     ollamaHost?: string;
@@ -76,6 +79,8 @@ export function getDefaultModelForProvider(provider: string): string {
             return 'voyage-code-3';
         case 'Gemini':
             return 'gemini-embedding-001';
+        case 'VertexAI':
+            return 'gemini-embedding-001';
         case 'Ollama':
             return 'nomic-embed-text';
         default:
@@ -94,6 +99,7 @@ export function getEmbeddingModelForProvider(provider: string): string {
         case 'OpenAI':
         case 'VoyageAI':
         case 'Gemini':
+        case 'VertexAI':
         default:
             // For all other providers, use EMBEDDING_MODEL or default
             const selectedModel = envManager.get('EMBEDDING_MODEL') || getDefaultModelForProvider(provider);
@@ -110,6 +116,10 @@ export function createMcpConfig(): ContextMcpConfig {
     console.log(`[DEBUG]   OLLAMA_MODEL: ${envManager.get('OLLAMA_MODEL') || 'NOT SET'}`);
     console.log(`[DEBUG]   GEMINI_API_KEY: ${envManager.get('GEMINI_API_KEY') ? 'SET (length: ' + envManager.get('GEMINI_API_KEY')!.length + ')' : 'NOT SET'}`);
     console.log(`[DEBUG]   OPENAI_API_KEY: ${envManager.get('OPENAI_API_KEY') ? 'SET (length: ' + envManager.get('OPENAI_API_KEY')!.length + ')' : 'NOT SET'}`);
+    console.log(`[DEBUG]   VERTEX_PROJECT: ${envManager.get('VERTEX_PROJECT') || 'NOT SET'}`);
+    console.log(`[DEBUG]   VERTEX_LOCATION: ${envManager.get('VERTEX_LOCATION') || 'NOT SET'}`);
+    console.log(`[DEBUG]   GOOGLE_CLOUD_PROJECT: ${envManager.get('GOOGLE_CLOUD_PROJECT') || 'NOT SET'}`);
+    console.log(`[DEBUG]   GOOGLE_CLOUD_LOCATION: ${envManager.get('GOOGLE_CLOUD_LOCATION') || 'NOT SET'}`);
     console.log(`[DEBUG]   MILVUS_ADDRESS: ${envManager.get('MILVUS_ADDRESS') || 'NOT SET'}`);
     console.log(`[DEBUG]   NODE_ENV: ${envManager.get('NODE_ENV') || 'NOT SET'}`);
 
@@ -117,7 +127,7 @@ export function createMcpConfig(): ContextMcpConfig {
         name: envManager.get('MCP_SERVER_NAME') || "Context MCP Server",
         version: envManager.get('MCP_SERVER_VERSION') || "1.0.0",
         // Embedding provider configuration
-        embeddingProvider: (envManager.get('EMBEDDING_PROVIDER') as 'OpenAI' | 'VoyageAI' | 'Gemini' | 'Ollama') || 'OpenAI',
+        embeddingProvider: (envManager.get('EMBEDDING_PROVIDER') as 'OpenAI' | 'VoyageAI' | 'Gemini' | 'Ollama' | 'VertexAI') || 'OpenAI',
         embeddingModel: getEmbeddingModelForProvider(envManager.get('EMBEDDING_PROVIDER') || 'OpenAI'),
         // Provider-specific API keys
         openaiApiKey: envManager.get('OPENAI_API_KEY'),
@@ -125,6 +135,9 @@ export function createMcpConfig(): ContextMcpConfig {
         voyageaiApiKey: envManager.get('VOYAGEAI_API_KEY'),
         geminiApiKey: envManager.get('GEMINI_API_KEY'),
         geminiBaseUrl: envManager.get('GEMINI_BASE_URL'),
+        // Vertex AI configuration
+        vertexProject: envManager.get('VERTEX_PROJECT') || envManager.get('GOOGLE_CLOUD_PROJECT'),
+        vertexLocation: envManager.get('VERTEX_LOCATION') || envManager.get('GOOGLE_CLOUD_LOCATION') || 'global',
         // Ollama configuration
         ollamaModel: envManager.get('OLLAMA_MODEL'),
         ollamaHost: envManager.get('OLLAMA_HOST'),
@@ -185,7 +198,7 @@ Environment Variables:
   MCP_SERVER_VERSION      Server version
   
   Embedding Provider Configuration:
-  EMBEDDING_PROVIDER      Embedding provider: OpenAI, VoyageAI, Gemini, Ollama (default: OpenAI)
+  EMBEDDING_PROVIDER      Embedding provider: OpenAI, VoyageAI, Gemini, Ollama, VertexAI (default: OpenAI)
   EMBEDDING_MODEL         Embedding model name (works for all providers)
   
   Provider-specific API Keys:
@@ -194,6 +207,12 @@ Environment Variables:
   VOYAGEAI_API_KEY        VoyageAI API key (required for VoyageAI provider)
   GEMINI_API_KEY          Google AI API key (required for Gemini provider)
   GEMINI_BASE_URL         Gemini API base URL (optional, for custom endpoints)
+  
+  Vertex AI Configuration (uses Application Default Credentials / service accounts):
+  VERTEX_PROJECT          Vertex AI project ID (alternative to GOOGLE_CLOUD_PROJECT)
+  VERTEX_LOCATION         Vertex AI location (e.g., global, us-central1; alternative to GOOGLE_CLOUD_LOCATION)
+  GOOGLE_CLOUD_PROJECT    Default GCP project ID (used if VERTEX_PROJECT is not set)
+  GOOGLE_CLOUD_LOCATION   Default GCP location (used if VERTEX_LOCATION is not set, default: global)
   
   Ollama Configuration:
   OLLAMA_HOST             Ollama server host (default: http://127.0.0.1:11434)

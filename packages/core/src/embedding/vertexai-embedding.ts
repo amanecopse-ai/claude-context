@@ -1,31 +1,48 @@
 import { GoogleGenAI } from '@google/genai';
 import { Embedding, EmbeddingVector } from './base-embedding';
 
-export interface GeminiEmbeddingConfig {
+export interface VertexAIEmbeddingConfig {
     model: string;
-    apiKey: string;
-    baseURL?: string; // Optional custom API endpoint URL
-    outputDimensionality?: number; // Optional dimension override
+    /** Optional explicit Vertex AI project ID. Falls back to VERTEX_PROJECT or GOOGLE_CLOUD_PROJECT env vars. */
+    projectId?: string;
+    /** Optional explicit Vertex AI location (for example, "global" or "us-central1"). */
+    location?: string;
+    /** Optional output embedding dimensionality (Matryoshka-style dimensions). */
+    outputDimensionality?: number;
 }
 
-export class GeminiEmbedding extends Embedding {
+export class VertexAIEmbedding extends Embedding {
     private client: GoogleGenAI;
-    private config: GeminiEmbeddingConfig;
+    private config: VertexAIEmbeddingConfig;
     private dimension: number = 3072; // Default dimension for gemini-embedding-001
-    protected maxTokens: number = 2048; // Maximum tokens for Gemini embedding models
+    protected maxTokens: number = 2048; // Maximum tokens for Gemini embedding models on Vertex AI
 
-    constructor(config: GeminiEmbeddingConfig) {
+    constructor(config: VertexAIEmbeddingConfig) {
         super();
         this.config = config;
+
+        const projectId =
+            config.projectId ||
+            process.env.VERTEX_PROJECT ||
+            process.env.GOOGLE_CLOUD_PROJECT;
+
+        const location =
+            config.location ||
+            process.env.VERTEX_LOCATION ||
+            process.env.GOOGLE_CLOUD_LOCATION ||
+            'global';
+
+        if (!projectId) {
+            throw new Error(
+                '[VertexAIEmbedding] Project ID is required. Set projectId in config or VERTEX_PROJECT / GOOGLE_CLOUD_PROJECT env.'
+            );
+        }
+
+        // Configure Google GenAI client to use Vertex AI backend
         this.client = new GoogleGenAI({
-            // Explicitly use Gemini Developer API (do not auto-switch to Vertex AI)
-            vertexai: false,
-            apiKey: config.apiKey,
-            ...(config.baseURL && {
-                httpOptions: {
-                    baseUrl: config.baseURL
-                }
-            }),
+            vertexai: true,
+            project: projectId,
+            location,
         });
 
         // Set dimension based on model and configuration
@@ -38,7 +55,7 @@ export class GeminiEmbedding extends Embedding {
     }
 
     private updateDimensionForModel(model: string): void {
-        const supportedModels = GeminiEmbedding.getSupportedModels();
+        const supportedModels = VertexAIEmbedding.getSupportedModels();
         const modelInfo = supportedModels[model];
 
         if (modelInfo) {
@@ -52,7 +69,7 @@ export class GeminiEmbedding extends Embedding {
     }
 
     async detectDimension(): Promise<number> {
-        // Gemini doesn't need dynamic detection, return configured dimension
+        // Vertex AI doesn't need dynamic detection, return configured dimension
         return this.dimension;
     }
 
@@ -62,7 +79,7 @@ export class GeminiEmbedding extends Embedding {
 
         try {
             const response = await this.client.models.embedContent({
-                model: model,
+                model,
                 contents: processedText,
                 config: {
                     outputDimensionality: this.config.outputDimensionality || this.dimension,
@@ -70,15 +87,17 @@ export class GeminiEmbedding extends Embedding {
             });
 
             if (!response.embeddings || !response.embeddings[0] || !response.embeddings[0].values) {
-                throw new Error('Gemini API returned invalid response');
+                throw new Error('Vertex AI embedding API returned invalid response');
             }
 
             return {
                 vector: response.embeddings[0].values,
-                dimension: response.embeddings[0].values.length
+                dimension: response.embeddings[0].values.length,
             };
         } catch (error) {
-            throw new Error(`Gemini embedding failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            throw new Error(
+                `Vertex AI embedding failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+            );
         }
     }
 
@@ -88,7 +107,7 @@ export class GeminiEmbedding extends Embedding {
 
         try {
             const response = await this.client.models.embedContent({
-                model: model,
+                model,
                 contents: processedTexts,
                 config: {
                     outputDimensionality: this.config.outputDimensionality || this.dimension,
@@ -96,20 +115,22 @@ export class GeminiEmbedding extends Embedding {
             });
 
             if (!response.embeddings) {
-                throw new Error('Gemini API returned invalid response');
+                throw new Error('Vertex AI embedding API returned invalid response');
             }
 
             return response.embeddings.map((embedding: any) => {
                 if (!embedding.values) {
-                    throw new Error('Gemini API returned invalid embedding data');
+                    throw new Error('Vertex AI embedding API returned invalid embedding data');
                 }
                 return {
                     vector: embedding.values,
-                    dimension: embedding.values.length
+                    dimension: embedding.values.length,
                 };
             });
         } catch (error) {
-            throw new Error(`Gemini batch embedding failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            throw new Error(
+                `Vertex AI batch embedding failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+            );
         }
     }
 
@@ -118,45 +139,24 @@ export class GeminiEmbedding extends Embedding {
     }
 
     getProvider(): string {
-        return 'Gemini';
+        return 'VertexAI';
     }
 
     /**
-     * Set model type
-     * @param model Model name
+     * Get list of supported models when using Vertex AI embeddings.
      */
-    setModel(model: string): void {
-        this.config.model = model;
-        this.updateDimensionForModel(model);
-    }
-
-    /**
-     * Set output dimensionality
-     * @param dimension Output dimension (must be supported by the model)
-     */
-    setOutputDimensionality(dimension: number): void {
-        this.config.outputDimensionality = dimension;
-        this.dimension = dimension;
-    }
-
-    /**
-     * Get client instance (for advanced usage)
-     */
-    getClient(): GoogleGenAI {
-        return this.client;
-    }
-
-    /**
-     * Get list of supported models
-     */
-    static getSupportedModels(): Record<string, { dimension: number; contextLength: number; description: string; supportedDimensions?: number[] }> {
+    static getSupportedModels(): Record<
+        string,
+        { dimension: number; contextLength: number; description: string; supportedDimensions?: number[] }
+    > {
         return {
             'gemini-embedding-001': {
                 dimension: 3072,
                 contextLength: 2048,
-                description: 'Latest Gemini embedding model with state-of-the-art performance (recommended)',
-                supportedDimensions: [3072, 1536, 768, 256] // Matryoshka Representation Learning support
-            }
+                description: 'Gemini text embedding model served via Vertex AI (recommended)',
+                // Matryoshka Representation Learning supported dimensions
+                supportedDimensions: [3072, 1536, 768, 256],
+            },
         };
     }
 
@@ -164,7 +164,8 @@ export class GeminiEmbedding extends Embedding {
      * Get supported dimensions for the current model
      */
     getSupportedDimensions(): number[] {
-        const modelInfo = GeminiEmbedding.getSupportedModels()[this.config.model || 'gemini-embedding-001'];
+        const modelInfo =
+            VertexAIEmbedding.getSupportedModels()[this.config.model || 'gemini-embedding-001'];
         return modelInfo?.supportedDimensions || [this.dimension];
     }
 

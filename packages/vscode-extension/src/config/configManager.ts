@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { OpenAIEmbedding, OpenAIEmbeddingConfig, VoyageAIEmbedding, VoyageAIEmbeddingConfig, OllamaEmbedding, OllamaEmbeddingConfig, GeminiEmbedding, GeminiEmbeddingConfig, MilvusConfig, SplitterType, SplitterConfig, AstCodeSplitter, LangChainCodeSplitter } from '@zilliz/claude-context-core';
+import { OpenAIEmbedding, OpenAIEmbeddingConfig, VoyageAIEmbedding, VoyageAIEmbeddingConfig, OllamaEmbedding, OllamaEmbeddingConfig, GeminiEmbedding, GeminiEmbeddingConfig, VertexAIEmbedding, VertexAIEmbeddingConfig, MilvusConfig, SplitterType, SplitterConfig, AstCodeSplitter, LangChainCodeSplitter } from '@zilliz/claude-context-core';
 
 // Simplified Milvus configuration interface for frontend
 export interface MilvusWebConfig {
@@ -19,6 +19,9 @@ export type EmbeddingProviderConfig = {
 } | {
     provider: 'Gemini';
     config: GeminiEmbeddingConfig;
+} | {
+    provider: 'VertexAI';
+    config: VertexAIEmbeddingConfig;
 };
 
 export type SplitterProviderConfig = {
@@ -102,6 +105,22 @@ const EMBEDDING_PROVIDERS = {
         ] as FieldDefinition[],
         defaultConfig: {
             model: 'gemini-embedding-001'
+        }
+    },
+    'VertexAI': {
+        name: 'VertexAI',
+        class: VertexAIEmbedding,
+        requiredFields: [
+            { name: 'model', type: 'string', description: 'Model name to use', inputType: 'select-with-custom', required: true },
+            { name: 'projectId', type: 'string', description: 'Vertex AI project ID', inputType: 'text', required: true },
+            { name: 'location', type: 'string', description: 'Vertex AI location (e.g., global, us-central1)', inputType: 'text', required: true }
+        ] as FieldDefinition[],
+        optionalFields: [
+            { name: 'outputDimensionality', type: 'number', description: 'Output dimension (supports Matryoshka representation)', inputType: 'text', placeholder: '3072' }
+        ] as FieldDefinition[],
+        defaultConfig: {
+            model: 'gemini-embedding-001',
+            location: 'global'
         }
     }
 } as const;
@@ -205,7 +224,7 @@ export class ConfigManager {
         if (!configObject) return undefined;
 
         return {
-            provider: provider as 'OpenAI' | 'VoyageAI' | 'Ollama' | 'Gemini',
+            provider: provider as 'OpenAI' | 'VoyageAI' | 'Ollama' | 'Gemini' | 'VertexAI',
             config: configObject
         };
     }
