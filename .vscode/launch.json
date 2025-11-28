@@ -29,6 +29,24 @@
 				"${workspaceFolder}/packages/vscode-extension/dist/test/**/*.js"
 			],
 			"preLaunchTask": "npm: webpack:dev - packages/vscode-extension"
+		},
+		{
+			"name": "Launch CLI",
+			"program": "${workspaceFolder}/packages/cli/dist/cli.js",
+			"request": "launch",
+			"args": [
+				"index",
+				"${input:codebase_path}"
+			],
+			"type": "node"
+		}
+	],
+	"inputs": [
+		{
+			"id": "codebase_path",
+			"description": "Enter codebase path to index (e.g. 'C:\\workspace\\agents\\claude-context')",
+			"default": "C:\\workspace\\agents\\claude-context",
+			"type": "promptString"
 		}
 	]
 }
