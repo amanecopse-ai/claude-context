@@ -3,12 +3,9 @@
 import { Command } from 'commander';
 import {
   Context,
-  MilvusVectorDatabase,
-  COLLECTION_LIMIT_MESSAGE
+  MilvusVectorDatabase
 } from '@zilliz/claude-context-core';
-import * as fs from 'fs';
 import {
-  ensureAbsolutePath,
   createMcpConfig,
   logConfigurationSummary,
   createEmbeddingInstance,
@@ -18,8 +15,6 @@ import {
 } from '@zilliz/claude-context-mcp/api';
 
 interface Engine {
-  context: Context;
-  snapshotManager: SnapshotManager;
   toolHandlers: ToolHandlers;
 }
 
@@ -40,14 +35,14 @@ async function createEngine(): Promise<Engine> {
   snapshotManager.loadCodebaseSnapshot();
 
   const toolHandlers = new ToolHandlers(context, snapshotManager);
-  return { context, snapshotManager, toolHandlers };
+  return { toolHandlers };
 }
 
 function printMcpResponse(result: any): void {
   const pieces = Array.isArray(result?.content)
     ? result.content
-        .filter((c: any) => c?.type === 'text' && typeof c.text === 'string')
-        .map((c: any) => c.text)
+      .filter((c: any) => c?.type === 'text' && typeof c.text === 'string')
+      .map((c: any) => c.text)
     : [];
 
   const text = pieces.join('\n\n') || 'No output.';
@@ -57,84 +52,6 @@ function printMcpResponse(result: any): void {
     process.exitCode = 1;
   } else {
     console.log(text);
-  }
-}
-
-async function runIndex(pathArg: string, options: any): Promise<void> {
-  const { context, snapshotManager } = await createEngine();
-  const absolutePath = ensureAbsolutePath(pathArg);
-
-  if (!fs.existsSync(absolutePath)) {
-    console.error(`Error: Path '${absolutePath}' does not exist.`);
-    process.exit(1);
-  }
-
-  const stat = fs.statSync(absolutePath);
-  if (!stat.isDirectory()) {
-    console.error(`Error: Path '${absolutePath}' is not a directory.`);
-    process.exit(1);
-  }
-
-  const force = !!options.force;
-
-  const currentStatus = snapshotManager.getCodebaseStatus(absolutePath);
-  if (currentStatus === 'indexing') {
-    console.error(`Codebase '${absolutePath}' is already being indexed.`);
-    process.exit(1);
-  }
-
-  const hasIndex = await context.hasIndex(absolutePath);
-  if (hasIndex && !force) {
-    console.error(`Codebase '${absolutePath}' is already indexed. Use --force to re-index.`);
-    process.exit(1);
-  }
-
-  const canCreate = await context.getVectorDatabase().checkCollectionLimit();
-  if (!canCreate) {
-    console.error(COLLECTION_LIMIT_MESSAGE);
-    process.exit(1);
-  }
-
-  const customExt: string[] = options.ext || [];
-  const ignorePatterns: string[] = options.ignore || [];
-  if (customExt.length > 0) {
-    context.addCustomExtensions(customExt);
-  }
-  if (ignorePatterns.length > 0) {
-    context.addCustomIgnorePatterns(ignorePatterns);
-  }
-
-  snapshotManager.setCodebaseIndexing(absolutePath, 0);
-  snapshotManager.saveCodebaseSnapshot();
-
-  let lastProgress = 0;
-  console.log(`[INDEX] Starting indexing for '${absolutePath}'...`);
-
-  try {
-    const stats = await context.indexCodebase(
-      absolutePath,
-      (progress) => {
-        lastProgress = progress.percentage;
-        const pct = progress.percentage.toFixed(1).padStart(6, ' ');
-        process.stdout.write(`\r[INDEX] ${pct}% - ${progress.phase}`);
-      },
-      force
-    );
-
-    process.stdout.write('\n');
-    snapshotManager.setCodebaseIndexed(absolutePath, stats);
-    snapshotManager.saveCodebaseSnapshot();
-
-    console.log(
-      `[INDEX] Completed. Files: ${stats.indexedFiles}, Chunks: ${stats.totalChunks}, Status: ${stats.status}`
-    );
-  } catch (error: any) {
-    process.stdout.write('\n');
-    const message = error?.message || String(error);
-    snapshotManager.setCodebaseIndexFailed(absolutePath, message, lastProgress);
-    snapshotManager.saveCodebaseSnapshot();
-    console.error(`[INDEX] Failed: ${message}`);
-    process.exit(1);
   }
 }
 
@@ -153,11 +70,16 @@ async function main() {
     .option('-s, --splitter <splitter>', "Code splitter: 'ast' or 'langchain' (currently AST-based)", 'ast')
     .option('--ext <extension...>', 'Additional file extensions to include (e.g. .vue .svelte)')
     .option('--ignore <pattern...>', 'Additional ignore patterns (e.g. static/** *.tmp)')
-    .action((pathArg, opts) => {
-      runIndex(pathArg, opts).catch((err) => {
-        console.error(err);
-        process.exit(1);
+    .action(async (pathArg, opts) => {
+      const { toolHandlers } = await createEngine();
+      const res = await toolHandlers.handleIndexCodebase({
+        path: pathArg,
+        force: !!opts.force,
+        splitter: opts.splitter || 'ast',
+        customExtensions: opts.ext || [],
+        ignorePatterns: opts.ignore || [],
       });
+      printMcpResponse(res);
     });
 
   program
